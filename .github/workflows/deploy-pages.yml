@@ -42,7 +42,7 @@ jobs:
         working-directory: clouddesk/artifacts/clouddesk
         env:
           PORT: 3000
-          BASE_PATH: /
+          BASE_PATH: /gu5f65ju6df5ed5gu76tg77d/
           NODE_ENV: production
         run: pnpm build
 
