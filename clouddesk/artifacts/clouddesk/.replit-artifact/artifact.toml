@@ -1,0 +1,27 @@
+kind = "web"
+previewPath = "/"
+title = "CloudDesk - Remote Device Management"
+version = "1.0.0"
+id = "artifacts/clouddesk"
+router = "path"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 23438
+
+[services.development]
+run = "pnpm --filter @workspace/clouddesk run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/clouddesk", "run", "build" ]
+serve = "static"
+publicDir = "artifacts/clouddesk/dist/public"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "23438"
+BASE_PATH = "/"

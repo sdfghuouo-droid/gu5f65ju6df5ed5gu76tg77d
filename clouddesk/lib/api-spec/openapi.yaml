@@ -1,0 +1,458 @@
+openapi: 3.1.0
+info:
+  # Do not change the title, if the title changes, the import paths will be broken
+  title: Api
+  version: 0.1.0
+  description: CloudDesk Remote Device Management API
+servers:
+  - url: /api
+    description: Base API path
+tags:
+  - name: health
+    description: Health operations
+  - name: clients
+    description: Remote client machine management
+  - name: commands
+    description: Shell command execution on remote machines
+  - name: files
+    description: Remote file management
+  - name: stats
+    description: Dashboard statistics
+  - name: agents
+    description: Agent registration and heartbeat
+
+paths:
+  /healthz:
+    get:
+      operationId: healthCheck
+      tags: [health]
+      summary: Health check
+      responses:
+        "200":
+          description: Healthy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthStatus"
+
+  /stats:
+    get:
+      operationId: getStats
+      tags: [stats]
+      summary: Get dashboard statistics
+      responses:
+        "200":
+          description: Dashboard stats
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DashboardStats"
+
+  /clients:
+    get:
+      operationId: listClients
+      tags: [clients]
+      summary: List all registered client machines
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [online, offline, alerting, maintenance]
+        - name: search
+          in: query
+          schema:
+            type: string
+        - name: group
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: List of clients
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Client"
+
+  /clients/register:
+    post:
+      operationId: registerClient
+      tags: [agents]
+      summary: Register a new agent/client (called by the agent script)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ClientRegistration"
+      responses:
+        "201":
+          description: Client registered, returns token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RegistrationResult"
+
+  /clients/{id}:
+    get:
+      operationId: getClient
+      tags: [clients]
+      summary: Get a specific client
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Client details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Client"
+        "404":
+          description: Not found
+    put:
+      operationId: updateClient
+      tags: [clients]
+      summary: Update client metadata (group, tags, maintenance)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ClientUpdate"
+      responses:
+        "200":
+          description: Updated client
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Client"
+    delete:
+      operationId: deleteClient
+      tags: [clients]
+      summary: Remove a client
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: Deleted
+
+  /clients/{id}/commands:
+    get:
+      operationId: listCommands
+      tags: [commands]
+      summary: Get command history for a client (last 50)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: List of commands
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Command"
+    post:
+      operationId: runCommand
+      tags: [commands]
+      summary: Send a shell command to a remote client
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CommandInput"
+      responses:
+        "202":
+          description: Command queued
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Command"
+
+  /clients/{id}/commands/{cmdId}:
+    get:
+      operationId: getCommand
+      tags: [commands]
+      summary: Get result of a specific command
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: cmdId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Command details with output
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Command"
+
+  /clients/{id}/files:
+    get:
+      operationId: listFiles
+      tags: [files]
+      summary: List files at root path on the remote client
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: File listing
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/FileEntry"
+
+  /agents/heartbeat:
+    post:
+      operationId: agentHeartbeat
+      tags: [agents]
+      summary: Agent sends live metrics heartbeat
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/HeartbeatInput"
+      responses:
+        "200":
+          description: Heartbeat acknowledged, returns pending commands
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HeartbeatResponse"
+
+components:
+  schemas:
+    HealthStatus:
+      type: object
+      properties:
+        status:
+          type: string
+      required:
+        - status
+
+    DashboardStats:
+      type: object
+      required: [total, online, offline, alerting, maintenance]
+      properties:
+        total:
+          type: integer
+        online:
+          type: integer
+        offline:
+          type: integer
+        alerting:
+          type: integer
+        maintenance:
+          type: integer
+
+    Client:
+      type: object
+      required: [id, hostname, status, lastSeen, createdAt]
+      properties:
+        id:
+          type: string
+        hostname:
+          type: string
+        username:
+          type: ["string", "null"]
+        os:
+          type: ["string", "null"]
+        ipAddress:
+          type: ["string", "null"]
+        agentVersion:
+          type: ["string", "null"]
+        cpu:
+          type: ["number", "null"]
+          description: CPU usage percent 0-100
+        ram:
+          type: ["number", "null"]
+          description: RAM used in GB
+        ramTotal:
+          type: ["number", "null"]
+          description: Total RAM in GB
+        disk:
+          type: ["number", "null"]
+          description: Disk used in GB
+        diskTotal:
+          type: ["number", "null"]
+          description: Total disk in GB
+        status:
+          type: string
+          enum: [online, offline, alerting, maintenance]
+        health:
+          type: string
+          enum: [good, warning, critical]
+        group:
+          type: ["string", "null"]
+        tags:
+          type: array
+          items:
+            type: string
+        lastSeen:
+          type: string
+          format: date-time
+        createdAt:
+          type: string
+          format: date-time
+
+    ClientRegistration:
+      type: object
+      required: [hostname]
+      properties:
+        hostname:
+          type: string
+        username:
+          type: string
+        os:
+          type: string
+        agentVersion:
+          type: string
+        ipAddress:
+          type: string
+
+    RegistrationResult:
+      type: object
+      required: [clientId, token]
+      properties:
+        clientId:
+          type: string
+        token:
+          type: string
+
+    ClientUpdate:
+      type: object
+      properties:
+        group:
+          type: ["string", "null"]
+        tags:
+          type: array
+          items:
+            type: string
+        status:
+          type: string
+          enum: [online, offline, alerting, maintenance]
+
+    Command:
+      type: object
+      required: [id, clientId, command, status, createdAt]
+      properties:
+        id:
+          type: string
+        clientId:
+          type: string
+        command:
+          type: string
+        output:
+          type: ["string", "null"]
+        exitCode:
+          type: ["integer", "null"]
+        status:
+          type: string
+          enum: [pending, running, completed, failed, timeout]
+        createdAt:
+          type: string
+          format: date-time
+        completedAt:
+          type: ["string", "null"]
+          format: date-time
+
+    CommandInput:
+      type: object
+      required: [command]
+      properties:
+        command:
+          type: string
+        timeoutSeconds:
+          type: integer
+          default: 30
+
+    FileEntry:
+      type: object
+      required: [name, path, isDirectory]
+      properties:
+        name:
+          type: string
+        path:
+          type: string
+        isDirectory:
+          type: boolean
+        size:
+          type: ["integer", "null"]
+        modifiedAt:
+          type: ["string", "null"]
+          format: date-time
+
+    HeartbeatInput:
+      type: object
+      required: [clientId, token]
+      properties:
+        clientId:
+          type: string
+        token:
+          type: string
+        cpu:
+          type: number
+        ram:
+          type: number
+        ramTotal:
+          type: number
+        disk:
+          type: number
+        diskTotal:
+          type: number
+        ipAddress:
+          type: string
+        pendingFiles:
+          type: array
+          items:
+            $ref: "#/components/schemas/FileEntry"
+
+    HeartbeatResponse:
+      type: object
+      required: [pendingCommands]
+      properties:
+        pendingCommands:
+          type: array
+          items:
+            $ref: "#/components/schemas/Command"

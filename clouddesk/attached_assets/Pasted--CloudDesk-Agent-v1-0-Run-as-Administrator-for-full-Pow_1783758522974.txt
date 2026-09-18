@@ -1,0 +1,116 @@
+# CloudDesk Agent v1.0
+# Run as Administrator for full PowerShell access
+# This script registers the machine with CloudDesk and keeps it connected.
+
+$ServerUrl  = "https://bf2dda4a-5e3a-48b4-84c1-005c0e2e8390-00-2jpmhxi2axpbf.kirk.replit.dev"
+$ConfigFile = "$env:LOCALAPPDATA\CloudDesk\agent.json"
+$LogFile    = "$env:LOCALAPPDATA\CloudDesk\agent.log"
+
+New-Item -ItemType Directory -Force -Path "$env:LOCALAPPDATA\CloudDesk" | Out-Null
+
+function Write-Log($msg) {
+    $line = "$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')  $msg"
+    Add-Content -Path $LogFile -Value $line
+    Write-Host $line
+}
+
+function Get-LocalIP {
+    try {
+        (Get-NetIPAddress -AddressFamily IPv4 |
+         Where-Object { $_.IPAddress -ne "127.0.0.1" -and $_.PrefixOrigin -ne "WellKnown" } |
+         Select-Object -First 1).IPAddress
+    } catch { "unknown" }
+}
+
+function Get-OSCaption {
+    try { (Get-WmiObject Win32_OperatingSystem).Caption }
+    catch { "$env:OS" }
+}
+
+# ── Register if no saved config ───────────────────────────────────────────────
+if (-not (Test-Path $ConfigFile)) {
+    Write-Log "Registering with CloudDesk at $ServerUrl ..."
+    $body = @{
+        hostname     = $env:COMPUTERNAME
+        username     = $env:USERNAME
+        os           = (Get-OSCaption)
+        agentVersion = "v1.0.0"
+        ipAddress    = (Get-LocalIP)
+    } | ConvertTo-Json
+
+    try {
+        $reg = Invoke-RestMethod -Uri "$ServerUrl/api/clients/register" `
+                                 -Method Post -Body $body `
+                                 -ContentType "application/json"
+        $reg | ConvertTo-Json | Out-File $ConfigFile -Encoding utf8
+        Write-Log "Registered OK. ClientID: $($reg.clientId)"
+    } catch {
+        Write-Log "Registration FAILED: $_"
+        exit 1
+    }
+}
+
+$cfg = Get-Content $ConfigFile | ConvertFrom-Json
+Write-Log "Agent started. ClientID: $($cfg.clientId)  (Ctrl+C to stop)"
+
+# ── Main heartbeat loop ───────────────────────────────────────────────────────
+while ($true) {
+    try {
+        $cpu  = [math]::Round(
+            (Get-WmiObject Win32_Processor |
+             Measure-Object -Property LoadPercentage -Average).Average, 1)
+
+        $osObj    = Get-WmiObject Win32_OperatingSystem
+        $ramTotal = [math]::Round($osObj.TotalVisibleMemorySize / 1MB, 2)
+        $ram      = [math]::Round($ramTotal - ($osObj.FreePhysicalMemory / 1MB), 2)
+
+        $dsk       = Get-WmiObject Win32_LogicalDisk -Filter "DeviceID='C:'"
+        $diskTotal = [math]::Round($dsk.Size / 1GB, 2)
+        $disk      = [math]::Round(($dsk.Size - $dsk.FreeSpace) / 1GB, 2)
+
+        $hb = @{
+            clientId  = $cfg.clientId
+            token     = $cfg.token
+            cpu       = $cpu
+            ram       = $ram
+            ramTotal  = $ramTotal
+            disk      = $disk
+            diskTotal = $diskTotal
+            ipAddress = (Get-LocalIP)
+        } | ConvertTo-Json
+
+        $resp = Invoke-RestMethod -Uri "$ServerUrl/api/agents/heartbeat" `
+                                  -Method Post -Body $hb `
+                                  -ContentType "application/json"
+
+        foreach ($cmd in $resp.pendingCommands) {
+            Write-Log "CMD >> $($cmd.command)"
+            try {
+                $out      = Invoke-Expression $cmd.command 2>&1 | Out-String
+                $exitCode = $LASTEXITCODE ?? 0
+                $status   = "completed"
+            } catch {
+                $out      = $_.ToString()
+                $exitCode = 1
+                $status   = "failed"
+            }
+
+            $res = @{
+                commandId   = $cmd.id
+                clientToken = $cfg.token
+                output      = $out
+                exitCode    = $exitCode
+                status      = $status
+            } | ConvertTo-Json
+
+            Invoke-RestMethod -Uri "$ServerUrl/api/agents/command-result" `
+                              -Method Post -Body $res `
+                              -ContentType "application/json" | Out-Null
+            Write-Log "CMD done [$status] exit=$exitCode"
+        }
+    } catch {
+        Write-Log "Heartbeat error: $_"
+    }
+
+    Start-Sleep -Seconds 10
+}

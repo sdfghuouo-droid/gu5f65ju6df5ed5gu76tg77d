@@ -1,0 +1,4 @@
+# Replit local files
+.cache/
+.local/
+node_modules/

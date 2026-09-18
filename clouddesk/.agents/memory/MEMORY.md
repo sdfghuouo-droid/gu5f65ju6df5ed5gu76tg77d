@@ -1,0 +1,2 @@
+- [Orval nested-route param collision](orval-param-collision.md) — ops with BOTH path params AND query params cause TS2308; fix by removing query params from nested routes.
+- [lucide-react icon names](lucide-icon-names.md) — Cross2Icon removed in v5+; use X instead.
