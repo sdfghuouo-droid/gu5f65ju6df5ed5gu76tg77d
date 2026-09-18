@@ -108,7 +108,9 @@ if ($path === '/clients/register' && $method === 'POST') {
 
     $clients = $storage->read('clients');
     $clients[] = $client;
-    $storage->write('clients', $clients);
+    if (!$storage->write('clients', $clients)) {
+        cd_error(500, 'Storage write failed');
+    }
 
     cd_json(201, ['clientId' => $client['id'], 'token' => $client['agentToken']]);
 }

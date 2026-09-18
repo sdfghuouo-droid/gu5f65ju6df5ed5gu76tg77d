@@ -65,7 +65,7 @@ jobs:
           }
           return false;
           ROUTER
-          php -S 127.0.0.1:8098 -t "$GITHUB_WORKSPACE/clouddesk/artifacts/clouddesk/dist/public" /tmp/dev-router.php > /tmp/php.log 2>&1 &
+          php -d display_errors=1 -d error_reporting=E_ALL -S 127.0.0.1:8098 -t "$GITHUB_WORKSPACE/clouddesk/artifacts/clouddesk/dist/public" /tmp/dev-router.php > /tmp/php.log 2>&1 &
           sleep 2
           echo "--- healthz ---"
           curl -s http://127.0.0.1:8098/api/healthz
@@ -73,6 +73,10 @@ jobs:
           echo "--- register agent ---"
           REG=$(curl -s -X POST http://127.0.0.1:8098/api/clients/register -H "Content-Type: application/json" -d '{"hostname":"TEST-PC","os":"windows","agentVersion":"v1.0.0","ipAddress":"192.168.1.5"}')
           echo "$REG"
+          echo "--- stored clients.json after register ---"
+          cat artifacts/clouddesk/dist/public/api/data/clients.json
+          echo ""
+          ls -la artifacts/clouddesk/dist/public/api/data/
           CID=$(echo "$REG" | php -r 'echo json_decode(stream_get_contents(STDIN),true)["clientId"];')
           TOK=$(echo "$REG" | php -r 'echo json_decode(stream_get_contents(STDIN),true)["token"];')
           echo "--- login wrong ---"

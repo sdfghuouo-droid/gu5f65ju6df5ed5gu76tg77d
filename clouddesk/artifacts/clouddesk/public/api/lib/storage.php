@@ -59,12 +59,14 @@ final class CDStorage {
         if (!is_file($file)) {
             return [];
         }
-        $fp = fopen($file, 'c');
+        // Use 'c+' (read+write) so the stream is open for reading on every platform.
+        $fp = fopen($file, 'c+');
         if (!$fp) {
             return [];
         }
         flock($fp, LOCK_SH);
-        $raw = filesize($file) > 0 ? fread($fp, filesize($file)) : '';
+        $size = filesize($file);
+        $raw = $size > 0 ? fread($fp, $size) : '';
         flock($fp, LOCK_UN);
         fclose($fp);
 
