@@ -312,6 +312,12 @@ async function parseSuccessBody(
     }
 
     case "blob":
+      // Static hosts (e.g. GitHub Pages) often serve extensionless files as
+      // application/octet-stream. In "auto" mode, sniff the payload so that
+      // JSON mocks still parse correctly instead of arriving as a Blob.
+      if (responseType === "auto") {
+        return parseSniffedBlob(response, requestInfo);
+      }
       if (typeof response.blob !== "function") {
         throw new TypeError(
           "Blob responses are not supported in this runtime. " +
@@ -320,6 +326,30 @@ async function parseSuccessBody(
       }
       return response.blob();
   }
+}
+
+async function parseSniffedBlob(
+  response: Response,
+  requestInfo: { method: string; url: string },
+): Promise<unknown> {
+  const raw = await response.text();
+  const normalized = stripBom(raw);
+
+  if (looksLikeJson(normalized)) {
+    try {
+      return JSON.parse(normalized);
+    } catch (cause) {
+      throw new ResponseParseError(response, raw, cause, requestInfo);
+    }
+  }
+
+  if (typeof response.blob === "function") {
+    return new Blob([raw], {
+      type: response.headers.get("content-type") || "application/octet-stream",
+    });
+  }
+
+  return raw;
 }
 
 export async function customFetch<T = unknown>(
