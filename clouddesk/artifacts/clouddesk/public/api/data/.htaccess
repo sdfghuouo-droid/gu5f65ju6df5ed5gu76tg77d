@@ -1,0 +1,2 @@
+# CloudDesk data directory — never serve these files
+Require all denied

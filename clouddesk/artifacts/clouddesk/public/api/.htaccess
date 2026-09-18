@@ -1,0 +1,9 @@
+# CloudDesk API router — route all API requests to index.php
+Options -Indexes
+RewriteEngine On
+RewriteBase /
+
+# Don't rewrite real files (assets etc.)
+RewriteCond %{REQUEST_FILENAME} !-f
+# Send everything else to the PHP router
+RewriteRule ^ index.php [QSA,L]

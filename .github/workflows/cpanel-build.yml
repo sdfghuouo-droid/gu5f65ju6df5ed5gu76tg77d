@@ -1,0 +1,120 @@
+name: Build cPanel Package
+
+on:
+  push:
+    branches: [main, master]
+  workflow_dispatch:
+
+env:
+  PORT: 3000
+  BASE_PATH: /
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Install Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: clouddesk/pnpm-lock.yaml
+
+      - name: Install dependencies
+        working-directory: clouddesk
+        run: pnpm install --no-frozen-lockfile
+
+      - name: Build CloudDesk frontend
+        working-directory: clouddesk
+        run: pnpm --filter @workspace/clouddesk run build
+        env:
+          PORT: 3000
+          BASE_PATH: /
+
+      - name: Verify PHP API is included in build output
+        working-directory: clouddesk
+        run: |
+          ls -la artifacts/clouddesk/dist/public/
+          test -f artifacts/clouddesk/dist/public/api/index.php && echo "PHP API OK"
+          test -f artifacts/clouddesk/dist/public/.htaccess && echo "SPA htaccess OK"
+
+      - name: PHP syntax check + smoke test
+        working-directory: clouddesk
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y php-cli
+          for f in $(find artifacts/clouddesk/dist/public/api -name "*.php"); do php -l "$f"; done
+          # Router mirrors the .htaccess: /api/* -> index.php, else static file (or index.html)
+          cat > /tmp/dev-router.php <<'ROUTER'
+          <?php
+          $path = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
+          $root = getenv('GITHUB_WORKSPACE') . '/clouddesk/artifacts/clouddesk/dist/public';
+          if (strpos($path, '/api') !== false) {
+              $idx = $root . '/api/index.php';
+              chdir(dirname($idx));
+              require $idx;
+              exit;
+          }
+          return false;
+          ROUTER
+          php -S 127.0.0.1:8098 -t "$GITHUB_WORKSPACE/clouddesk/artifacts/clouddesk/dist/public" /tmp/dev-router.php > /tmp/php.log 2>&1 &
+          sleep 2
+          echo "--- healthz ---"
+          curl -s http://127.0.0.1:8098/api/healthz
+          echo ""
+          echo "--- register agent ---"
+          REG=$(curl -s -X POST http://127.0.0.1:8098/api/clients/register -H "Content-Type: application/json" -d '{"hostname":"TEST-PC","os":"windows","agentVersion":"v1.0.0","ipAddress":"192.168.1.5"}')
+          echo "$REG"
+          CID=$(echo "$REG" | php -r 'echo json_decode(stream_get_contents(STDIN),true)["clientId"];')
+          TOK=$(echo "$REG" | php -r 'echo json_decode(stream_get_contents(STDIN),true)["token"];')
+          echo "--- login wrong ---"
+          curl -s -o /dev/null -w "%{http_code}\n" -X POST http://127.0.0.1:8098/api/auth/login -H "Content-Type: application/json" -d '{"username":"admin","password":"wrong"}'
+          echo "--- login correct ---"
+          curl -s -c /tmp/cj -X POST http://127.0.0.1:8098/api/auth/login -H "Content-Type: application/json" -d '{"username":"admin","password":"change-me"}'
+          echo ""
+          echo "--- stats before auth (expect 401) ---"
+          curl -s -o /dev/null -w "%{http_code}\n" http://127.0.0.1:8098/api/stats
+          echo "--- stats with session ---"
+          curl -s -b /tmp/cj http://127.0.0.1:8098/api/stats
+          echo ""
+          echo "--- clients with session ---"
+          curl -s -b /tmp/cj http://127.0.0.1:8098/api/clients
+          echo ""
+          echo "--- heartbeat with token ---"
+          curl -s -X POST http://127.0.0.1:8098/api/agents/heartbeat -H "Content-Type: application/json" -d "{\"clientId\":\"$CID\",\"token\":\"$TOK\",\"cpu\":32,\"ram\":4,\"ramTotal\":16,\"disk\":120,\"diskTotal\":500}"
+          echo ""
+          echo "--- run command (auth expected) ---"
+          CMD=$(curl -s -b /tmp/cj -X POST http://127.0.0.1:8098/api/clients/$CID/commands -H "Content-Type: application/json" -d '{"command":"hostname"}')
+          echo "$CMD"
+          CMDID=$(echo "$CMD" | php -r 'echo json_decode(stream_get_contents(STDIN),true)["id"];')
+          echo "--- command result ---"
+          curl -s -X POST http://127.0.0.1:8098/api/agents/command-result -H "Content-Type: application/json" -d "{\"commandId\":\"$CMDID\",\"clientToken\":\"$TOK\",\"output\":\"TEST-PC\",\"exitCode\":0,\"status\":\"completed\"}"
+          echo ""
+          echo "--- command list ---"
+          curl -s -b /tmp/cj http://127.0.0.1:8098/api/clients/$CID/commands
+          echo ""
+          kill %1 || true
+          # Remove test data so the published package ships empty
+          rm -f artifacts/clouddesk/dist/public/api/data/*.json
+          rm -f artifacts/clouddesk/dist/public/api/data/.lock
+
+      - name: Package cPanel zip
+        working-directory: clouddesk
+        run: |
+          cd artifacts/clouddesk/dist/public
+          zip -r ../../../../clouddesk-cpanel.zip . -x "*.git*"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: clouddesk-cpanel
+          path: clouddesk/clouddesk-cpanel.zip
+          retention-days: 7

@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700;800&family=Share+Tech+Mono&display=swap');
 @import 'tailwindcss';
 @import 'tw-animate-css';
 @plugin "@tailwindcss/typography";
@@ -57,8 +57,8 @@
   --color-sidebar-accent-border: var(--sidebar-accent-border);
   --color-sidebar-ring: hsl(var(--sidebar-ring));
 
-  --font-sans: 'Plus Jakarta Sans', sans-serif;
-  --font-mono: 'JetBrains Mono', monospace;
+  --font-sans: 'JetBrains Mono', 'Share Tech Mono', ui-monospace, monospace;
+  --font-mono: 'JetBrains Mono', 'Share Tech Mono', ui-monospace, monospace;
 
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
@@ -66,57 +66,67 @@
   --radius-xl: calc(var(--radius) + 4px);
 }
 
-/* Force Dark Mode Colors for Sysadmin Tool */
+/* ── HACKER / TERMINAL THEME (forced dark) ─────────────────────────────── */
 :root, .dark {
-  --button-outline: rgba(255, 255, 255, 0.1);
-  --badge-outline: rgba(255, 255, 255, 0.05);
+  --button-outline: rgba(0, 255, 65, 0.15);
+  --badge-outline: rgba(0, 255, 65, 0.08);
 
-  --opaque-button-border-intensity: 9;
+  --opaque-button-border-intensity: 12;
 
-  --elevate-1: rgba(255, 255, 255, 0.03);
-  --elevate-2: rgba(255, 255, 255, 0.08);
+  --elevate-1: rgba(0, 255, 65, 0.04);
+  --elevate-2: rgba(0, 255, 65, 0.1);
 
-  --background: 222 47% 4%; /* Very dark navy #050b14 */
-  --foreground: 210 40% 98%;
-  
-  --border: 217 32% 17%; /* Rich border #1e293b */
-  
-  --card: 222 47% 6%; /* Slightly lighter navy #080f1a */
-  --card-foreground: 210 40% 98%;
-  --card-border: 217 32% 17%;
-  
-  --popover: 222 47% 7%;
-  --popover-foreground: 210 40% 98%;
-  --popover-border: 217 32% 17%;
+  --background: 120 100% 3%;   /* #000a05 near-black */
+  --foreground: 140 100% 55%;  /* phosphor green */
 
-  --primary: 188 86% 53%; /* Electric Cyan #14b8a6 */
-  --primary-foreground: 164 100% 10%; /* Dark text on cyan */
-  
-  --secondary: 217 32% 17%; /* Surface deep #1e293b */
-  --secondary-foreground: 210 40% 98%;
-  
-  --muted: 217 32% 15%; /* #1a2332 */
-  --muted-foreground: 215 20% 65%; /* #94a3b8 */
-  
-  --accent: 217 32% 20%; 
-  --accent-foreground: 210 40% 98%;
-  
-  --destructive: 350 89% 60%; /* Sharp red */
+  --border: 140 60% 15%;
+  --card: 120 70% 5%;
+  --card-foreground: 140 100% 55%;
+  --card-border: 140 55% 16%;
+
+  --popover: 120 70% 5%;
+  --popover-foreground: 140 100% 55%;
+  --popover-border: 140 55% 16%;
+
+  --primary: 145 100% 45%;     /* bright green */
+  --primary-foreground: 120 100% 4%;
+  --primary-border: rgba(0, 255, 65, 0.35);
+
+  --secondary: 140 60% 12%;
+  --secondary-foreground: 140 90% 70%;
+  --secondary-border: rgba(0, 255, 65, 0.18);
+
+  --muted: 140 50% 9%;
+  --muted-foreground: 140 40% 45%;
+  --muted-border: rgba(0, 255, 65, 0.12);
+
+  --accent: 145 60% 14%;
+  --accent-foreground: 140 100% 60%;
+  --accent-border: rgba(0, 255, 65, 0.22);
+
+  --destructive: 0 90% 55%;
   --destructive-foreground: 0 0% 100%;
-  
-  --input: 217 32% 17%;
-  --ring: 188 86% 53%;
+  --destructive-border: rgba(255, 60, 60, 0.35);
 
-  --sidebar: 222 47% 4%;
-  --sidebar-foreground: 210 40% 98%;
-  --sidebar-border: 217 32% 17%;
-  --sidebar-primary: 188 86% 53%;
-  --sidebar-primary-foreground: 164 100% 10%;
-  --sidebar-accent: 217 32% 12%;
-  --sidebar-accent-foreground: 210 40% 98%;
-  --sidebar-ring: 188 86% 53%;
+  --input: 140 60% 14%;
+  --ring: 145 100% 45%;
 
-  --radius: 0.3rem; /* Tighter corners for precision feel */
+  --sidebar: 120 70% 4%;
+  --sidebar-foreground: 140 100% 55%;
+  --sidebar-border: 140 55% 13%;
+  --sidebar-primary: 145 100% 45%;
+  --sidebar-primary-foreground: 120 100% 4%;
+  --sidebar-accent: 140 50% 10%;
+  --sidebar-accent-foreground: 140 100% 60%;
+  --sidebar-ring: 145 100% 45%;
+
+  --chart-1: 145 100% 45%;
+  --chart-2: 160 90% 50%;
+  --chart-3: 100 90% 55%;
+  --chart-4: 190 90% 60%;
+  --chart-5: 50 95% 55%;
+
+  --radius: 0.15rem; /* ultra-tight, terminal feel */
 }
 
 @layer base {
@@ -126,6 +136,32 @@
   body {
     @apply font-sans antialiased bg-background text-foreground;
   }
+}
+
+/* CRT scanline overlay */
+body::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 9999;
+  background: repeating-linear-gradient(
+    to bottom,
+    rgba(0, 0, 0, 0) 0px,
+    rgba(0, 0, 0, 0) 2px,
+    rgba(0, 0, 0, 0.18) 3px,
+    rgba(0, 0, 0, 0) 4px
+  );
+  mix-blend-mode: multiply;
+}
+
+/* Terminal text glow */
+.font-mono, code, pre {
+  text-shadow: 0 0 6px rgba(0, 255, 65, 0.35);
+}
+
+::selection {
+  background: rgba(0, 255, 65, 0.3) !important;
 }
 
 /* Custom Scrollbar for dense lists */

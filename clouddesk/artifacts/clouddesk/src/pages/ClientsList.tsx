@@ -180,7 +180,7 @@ if not exist "%INSTALL%" mkdir "%INSTALL%"
 :: ── Test connectivity to server ──────────────────────────────────────────────
 echo   [0/3] Testing connection to server...
 PowerShell -NoProfile -ExecutionPolicy Bypass -Command ^
-  "try { $r = Invoke-WebRequest -Uri '${serverUrl}/api/stats' -UseBasicParsing -TimeoutSec 10 -ErrorAction Stop; Write-Host '  OK - server reachable (HTTP ' $r.StatusCode ')' } catch { Write-Host '  WARN - could not reach server: ' $_.Exception.Message }"
+  "try { $r = Invoke-WebRequest -Uri '${serverUrl}/api/healthz' -UseBasicParsing -TimeoutSec 10 -ErrorAction Stop; Write-Host '  OK - server reachable (HTTP ' $r.StatusCode ')' } catch { Write-Host '  WARN - could not reach server: ' $_.Exception.Message }"
 
 :: ── Write agent.ps1 from embedded base64 ────────────────────────────────────
 echo   [1/3] Writing agent script...

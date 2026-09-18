@@ -1,0 +1,12 @@
+# CloudDesk - SPA routing + API pass-through
+Options -Indexes
+RewriteEngine On
+RewriteBase /
+
+# Let the real API (PHP router under /api) handle its own requests
+RewriteRule ^api/ - [L]
+
+# If the request is not an existing file/dir → serve the SPA shell
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteRule ^ index.html [QSA,L]
