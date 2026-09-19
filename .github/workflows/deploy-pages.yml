@@ -1,0 +1,73 @@
+name: Deploy GitHub Pages
+
+on:
+  push:
+    branches: [main, master]
+  workflow_dispatch:
+
+env:
+  PORT: 3000
+  BASE_PATH: /gu5f65ju6df5ed5gu76tg77d/
+  VITE_API_BASE: ${{ vars.RENDER_API_URL || 'https://clouddesk-api.onrender.com/api' }}
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Install Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: clouddesk/pnpm-lock.yaml
+
+      - name: Install dependencies
+        working-directory: clouddesk
+        run: pnpm install --no-frozen-lockfile
+
+      - name: Build CloudDesk frontend
+        working-directory: clouddesk
+        run: pnpm --filter @workspace/clouddesk run build
+        env:
+          PORT: 3000
+          BASE_PATH: /gu5f65ju6df5ed5gu76tg77d/
+          VITE_API_BASE: ${{ vars.RENDER_API_URL || 'https://clouddesk-api.onrender.com/api' }}
+
+      - name: Prepare Pages artifact
+        working-directory: clouddesk
+        run: |
+          # GitHub Pages SPA fallback: serve index.html for unknown deep links
+          cp artifacts/clouddesk/dist/public/index.html artifacts/clouddesk/dist/public/404.html
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: clouddesk/artifacts/clouddesk/dist/public
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

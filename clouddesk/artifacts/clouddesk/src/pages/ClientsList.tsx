@@ -1,6 +1,7 @@
 import { useState, useMemo } from "react";
 import { useListClients, ListClientsStatus } from "@workspace/api-client-react";
 import { Link } from "wouter";
+import { API_ORIGIN } from "@/lib/config";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -234,7 +235,7 @@ exit /b 0
 function AddDeviceDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
   const [copied, setCopied] = useState(false);
 
-  const serverUrl = window.location.origin;
+  const serverUrl = API_ORIGIN;
 
   function handleDownload() {
     const bat = buildInstallerBat(serverUrl);

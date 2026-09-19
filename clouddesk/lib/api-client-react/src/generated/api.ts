@@ -37,7 +37,7 @@ import type {
 import { customFetch } from '../custom-fetch';
 import type { ErrorType , BodyType } from '../custom-fetch';
 
-const API_BASE = import.meta.env.BASE_URL ? `${import.meta.env.BASE_URL}api` : 'api';
+const API_BASE = (import.meta.env.VITE_API_BASE as string | undefined) || (import.meta.env.BASE_URL ? `${import.meta.env.BASE_URL}api` : 'api');
 
 type AwaitedInput<T> = PromiseLike<T> | T;
 

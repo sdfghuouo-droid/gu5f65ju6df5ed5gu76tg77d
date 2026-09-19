@@ -1,0 +1,123 @@
+name: Build & Test Express Backend
+
+on:
+  push:
+    branches: [main, master]
+  workflow_dispatch:
+
+env:
+  PORT: 3000
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: clouddesk
+          POSTGRES_PASSWORD: clouddesk
+          POSTGRES_DB: clouddesk
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U clouddesk"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Install Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: clouddesk/pnpm-lock.yaml
+
+      - name: Install dependencies
+        working-directory: clouddesk
+        run: pnpm install --no-frozen-lockfile
+
+      - name: Push DB schema
+        working-directory: clouddesk
+        run: pnpm --filter @workspace/db run push-force
+        env:
+          DATABASE_URL: postgres://clouddesk:clouddesk@127.0.0.1:5432/clouddesk
+
+      - name: Build API server
+        working-directory: clouddesk
+        run: pnpm --filter @workspace/api-server run build
+
+      - name: Typecheck API server
+        working-directory: clouddesk
+        run: pnpm --filter @workspace/api-server run typecheck
+
+      - name: Start API server + smoke test
+        working-directory: clouddesk
+        env:
+          DATABASE_URL: postgres://clouddesk:clouddesk@127.0.0.1:5432/clouddesk
+          AUTH_USER: admin
+          AUTH_PASSWORD_HASH: e2186dbdb1bb4193608605e84f33208765b5693b55edd4f730a719a100eeea6f
+          AUTH_SECRET: test-secret
+          COOKIE_SECRET: test-cookie-secret
+        run: |
+          node artifacts/api-server/dist/index.mjs > /tmp/api.log 2>&1 &
+          sleep 3
+          echo "--- healthz (public) ---"
+          curl -s http://127.0.0.1:3000/api/healthz
+          echo ""
+          echo "--- stats without auth (expect 401) ---"
+          curl -s -o /dev/null -w "%{http_code}\n" http://127.0.0.1:3000/api/stats
+          echo "--- login wrong (expect 401) ---"
+          curl -s -o /dev/null -w "%{http_code}\n" -X POST http://127.0.0.1:3000/api/auth/login -H "Content-Type: application/json" -d '{"username":"admin","password":"wrong"}'
+          echo "--- login correct ---"
+          curl -s -c /tmp/cj -X POST http://127.0.0.1:3000/api/auth/login -H "Content-Type: application/json" -d '{"username":"admin","password":"change-me"}'
+          echo ""
+          echo "--- me ---"
+          curl -s -b /tmp/cj http://127.0.0.1:3000/api/auth/me
+          echo ""
+          echo "--- register agent (public) ---"
+          REG=$(curl -s -X POST http://127.0.0.1:3000/api/clients/register -H "Content-Type: application/json" -d '{"hostname":"TEST-PC","os":"windows","agentVersion":"v1.0.0","ipAddress":"192.168.1.5"}')
+          echo "$REG"
+          CID=$(echo "$REG" | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>console.log(JSON.parse(s).clientId))')
+          TOK=$(echo "$REG" | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>console.log(JSON.parse(s).token))')
+          echo "--- stats with session ---"
+          curl -s -b /tmp/cj http://127.0.0.1:3000/api/stats
+          echo ""
+          echo "--- clients with session ---"
+          curl -s -b /tmp/cj http://127.0.0.1:3000/api/clients
+          echo ""
+          echo "--- clients without session (expect 401) ---"
+          curl -s -o /dev/null -w "%{http_code}\n" http://127.0.0.1:3000/api/clients
+          echo "--- heartbeat with token (public) ---"
+          curl -s -X POST http://127.0.0.1:3000/api/agents/heartbeat -H "Content-Type: application/json" -d "{\"clientId\":\"$CID\",\"token\":\"$TOK\",\"cpu\":32,\"ram\":4,\"ramTotal\":16,\"disk\":120,\"diskTotal\":500}"
+          echo ""
+          echo "--- run command (session) ---"
+          CMD=$(curl -s -b /tmp/cj -X POST http://127.0.0.1:3000/api/clients/$CID/commands -H "Content-Type: application/json" -d '{"command":"hostname"}')
+          echo "$CMD"
+          CMDID=$(echo "$CMD" | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>console.log(JSON.parse(s).id))')
+          echo "--- run command without session (expect 401) ---"
+          curl -s -o /dev/null -w "%{http_code}\n" -X POST http://127.0.0.1:3000/api/clients/$CID/commands -H "Content-Type: application/json" -d '{"command":"hostname"}'
+          echo "--- command result (public, token) ---"
+          curl -s -X POST http://127.0.0.1:3000/api/agents/command-result -H "Content-Type: application/json" -d "{\"commandId\":\"$CMDID\",\"clientToken\":\"$TOK\",\"output\":\"TEST-PC\",\"exitCode\":0,\"status\":\"completed\"}"
+          echo ""
+          echo "--- command list (session) ---"
+          curl -s -b /tmp/cj http://127.0.0.1:3000/api/clients/$CID/commands
+          echo ""
+          echo "--- logout ---"
+          curl -s -b /tmp/cj -c /tmp/cj -X POST http://127.0.0.1:3000/api/auth/logout
+          echo ""
+          echo "--- stats after logout (expect 401) ---"
+          curl -s -o /dev/null -w "%{http_code}\n" -b /tmp/cj http://127.0.0.1:3000/api/stats
+          echo "--- CORS preflight from github pages origin ---"
+          curl -s -o /dev/null -D - -X OPTIONS http://127.0.0.1:3000/api/stats -H "Origin: https://sdfghuouo-droid.github.io" -H "Access-Control-Request-Method: GET" | head -20
+          kill %1 || true
+          echo "--- server log ---"
+          cat /tmp/api.log

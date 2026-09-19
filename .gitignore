@@ -2,3 +2,4 @@
 .cache/
 .local/
 node_modules/
+release/
