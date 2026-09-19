@@ -51,6 +51,10 @@ jobs:
         env:
           DATABASE_URL: postgres://clouddesk:clouddesk@127.0.0.1:5432/clouddesk
 
+      - name: Build libs (project references)
+        working-directory: clouddesk
+        run: pnpm run typecheck:libs
+
       - name: Build API server
         working-directory: clouddesk
         run: pnpm --filter @workspace/api-server run build
